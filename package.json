@@ -10,7 +10,7 @@
   "categories": [ "Scripts", "Keys" ],
   "contributes": {
     "scripts": [
-        { "path": "./split_merge.lua" }
+        { "path": "./split-merge.lua" }
     ],
     "keys": [
       { "id": "split-merge-keys", "path": "./split-merge.aseprite-keys" }

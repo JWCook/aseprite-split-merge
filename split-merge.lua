@@ -1,12 +1,5 @@
--- Script that copies a range of frames to a separate file,
--- along with their associated tags, layers, and other metadata.
-
--- TODO: Merge multiple files
--- TODO: Separate dialogs, commands, and shortcuts for split and merge
--- TODO: Set default dialog frame range to existing selection from GUI, if any
--- TODO: Custom command and keyboard shortcut
--- TODO: Allow multiple ranges or single frames, like '2-4,5,7-9'
-
+-- Split and merge frames from one or more sprites to another.
+-- It preserves any associated tags, layers, and other metadata.
 
 --
 -- Test if an array contains a value
@@ -147,7 +140,7 @@ end
 -- Copy selected cels to new sprite
 --
 local function copy_cels(src_sprite, dest_sprite, start_frame, end_frame, frame_offset)
-  -- Index layers by name
+  -- Index any existing layers by name
   local layer_idx = {}
   for _, layer in ipairs(dest_sprite.layers) do
     layer_idx[layer.name] = layer
@@ -238,9 +231,11 @@ local function run()
 end
 
 --
--- Initialize plugin (if installed)
+-- Initialize plugin, if installed
 --
+IsPlugin = false
 function init(plugin)
+  IsPlugin = true
   plugin.preferences.overwrite = false
 
   plugin:newCommand {
@@ -255,8 +250,8 @@ function init(plugin)
 end
 
 --
--- Run as a CLI script
+-- Run as a standalone script, if not installed as a plugin
 --
-if not app.isUIAvailable then
+if not IsPlugin then
   run()
 end
