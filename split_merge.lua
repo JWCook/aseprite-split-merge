@@ -19,7 +19,7 @@
 --    --script-param end-frame=10 \
 --    --script scripts/split_frame_range.lua
 
--- TODO: Allow appending to an existing file
+-- TODO: Option to overwrite instead of append an existing file
 -- TODO: Allow multiple ranges or single frames, like '2-4,5,7-9'
 -- TODO: Optionally use existing selection from GUI (with shift+click)
 
@@ -113,27 +113,33 @@ local function get_dest_sprite(src_sprite, dest_path, start_frame, end_frame)
 end
 
 -- Copy layers and associated metadata to new sprite
+-- If they don't already exist; assume unique layer names
 local function copy_layers(src_sprite, dest_sprite)
+  local existing_layer_names = {}
+  for i, layer in ipairs(dest_sprite.layers) do
+    existing_layer_names[i] = layer.name
+  end
+
   for _, layer in ipairs(src_sprite.layers) do
-    local new_layer = dest_sprite:newLayer(layer)
-    new_layer.blendMode = layer.blendMode
-    new_layer.color = layer.color
-    new_layer.data = layer.data
-    new_layer.isCollapsed = layer.isCollapsed
-    new_layer.isContinuous = layer.isContinuous
-    new_layer.isEditable = layer.isEditable
-    new_layer.isVisible = layer.isVisible
-    new_layer.name = layer.name
-    new_layer.opacity = layer.opacity
+    if not contains(existing_layer_names, layer.name) then
+      local new_layer = dest_sprite:newLayer(layer)
+      new_layer.blendMode = layer.blendMode
+      new_layer.color = layer.color
+      new_layer.data = layer.data
+      new_layer.isCollapsed = layer.isCollapsed
+      new_layer.isContinuous = layer.isContinuous
+      new_layer.isEditable = layer.isEditable
+      new_layer.isVisible = layer.isVisible
+      new_layer.name = layer.name
+      new_layer.opacity = layer.opacity
+    end
   end
 
   return dest_sprite
 end
 
 -- Copy selected cels to new sprite
-local function copy_cels(src_sprite, dest_sprite, start_frame, end_frame)
-  local frame_offset = start_frame - 1
-
+local function copy_cels(src_sprite, dest_sprite, start_frame, end_frame, frame_offset)
   -- Index layers by name
   local layer_idx = {}
   for _, layer in ipairs(dest_sprite.layers) do
@@ -144,7 +150,7 @@ local function copy_cels(src_sprite, dest_sprite, start_frame, end_frame)
   for _, cel in ipairs(src_sprite.cels) do
     if cel.frameNumber >= start_frame and cel.frameNumber <= end_frame then
       -- Create new frame, if needed
-      local dest_frame = cel.frameNumber - frame_offset
+      local dest_frame = cel.frameNumber + frame_offset
       if dest_frame > #dest_sprite.frames then
         dest_sprite:newFrame()
       end
@@ -159,17 +165,15 @@ local function copy_cels(src_sprite, dest_sprite, start_frame, end_frame)
 end
 
 -- Copy tags and associated metadata for selected frames to new sprite
-local function copy_tags(src_sprite, dest_sprite, start_frame, end_frame)
-  local frame_offset = start_frame - 1
-
+local function copy_tags(src_sprite, dest_sprite, start_frame, end_frame, frame_offset)
   for _, tag in ipairs(src_sprite.tags) do
     local src_start = tag.fromFrame.frameNumber
     local src_end = tag.toFrame.frameNumber
 
     if src_start <= end_frame and src_end >= start_frame then
       -- Adjust tag frame range to be within selection frame range
-      local dest_start = math.max(1, src_start - frame_offset)
-      local dest_end = math.min(len(dest_sprite.frames), src_end - frame_offset)
+      local dest_start = math.max(1, src_start + frame_offset)
+      local dest_end = math.min(len(dest_sprite.frames), src_end + frame_offset)
 
       -- Copy tag + metadata to adjusted range
       local new_tag = dest_sprite:newTag(dest_start, dest_end)
@@ -207,9 +211,16 @@ else
   print('  To:   ' .. dest_sprite.filename)
 end
 
+-- end
+-- print(len(dest_sprite.layers))
+-- If this is an existing sprite, adjust offset by number of existing frames
+local frame_offset = -1 * (start_frame - 1)
+if len(dest_sprite.layers) > 0 then
+  frame_offset = frame_offset + len(dest_sprite.frames)
+end
 
 -- Copy selected data and save new sprite
 dest_sprite = copy_layers(src_sprite, dest_sprite)
-dest_sprite = copy_cels(src_sprite, dest_sprite, start_frame, end_frame)
-dest_sprite = copy_tags(src_sprite, dest_sprite, start_frame, end_frame)
+dest_sprite = copy_cels(src_sprite, dest_sprite, start_frame, end_frame, frame_offset)
+dest_sprite = copy_tags(src_sprite, dest_sprite, start_frame, end_frame, frame_offset)
 dest_sprite:saveAs(dest_sprite.filename)
