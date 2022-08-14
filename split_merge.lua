@@ -1,28 +1,10 @@
 -- Script that copies a range of frames to a separate file,
 -- along with their associated tags, layers, and other metadata.
 
--- GUI Usage:
--- 1. Find scripts folder; in Aseprite, go to File > Scrips > Open Scripts Folder
--- 2. Copy split_frame_range.lua to scripts folder
--- 3. Select File > Scripts > split_frame_range
-
--- CLI Usage:
--- src-sprite: sprite to copy from; otherwise use active sprite
--- dest-sprite: sprite to copy to; otherwise create new sprite
--- start-frame: Frame to start copying from; default: 1
--- end-frame: Frame to stop copying from; default: last frame of src-sprite
--- overwrite: Overwrite an existing file instead of appending to it; default: false
-
--- CLI Example:
--- aseprite -b sprites/my_sprite.aseprite \
---    --script-param dest-sprite=sprites/my_sprite_subset.aseprite \
---    --script-param start-frame=1 \
---    --script-param end-frame=10 \
---    --script-param overwrite=true \
---    --script scripts/split_frame_range.lua
-
--- TODO: Allow multiple ranges or single frames, like '2-4,5,7-9'
+-- TODO: Merge multiple files
 -- TODO: Optionally use existing selection from GUI (with shift+click)
+-- TODO: Custom command and keyboard shortcut
+-- TODO: Allow multiple ranges or single frames, like '2-4,5,7-9'
 
 
 --
