@@ -179,6 +179,7 @@ local function copy_tags(src_sprite, dest_sprite, start_frame, end_frame, frame_
 
       -- Copy tag + metadata to adjusted range
       local new_tag = dest_sprite:newTag(dest_start, dest_end)
+      new_tag.aniDir = tag.aniDir
       new_tag.color = tag.color
       new_tag.data = tag.data
       new_tag.name = tag.name
