@@ -1,0 +1,19 @@
+{
+  "name": "split-merge",
+  "displayName": "Aseprite Split & Merge",
+  "description": "Split and merge frames to/from different sprite files",
+  "version": "0.1",
+  "author": { "name": "Jordan Cook",
+              "email": "jordan.cook.git@proton.me",
+              "url": "https://github.com/JWCook/aseprite-split-merge" },
+  "license": "MIT",
+  "categories": [ "Scripts", "Keys" ],
+  "contributes": {
+    "scripts": [
+        { "path": "./split_merge.lua" }
+    ],
+    "keys": [
+      { "id": "split-merge-keys", "path": "./split-merge.aseprite-keys" }
+    ]
+  }
+}

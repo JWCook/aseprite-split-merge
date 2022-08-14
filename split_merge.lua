@@ -2,7 +2,8 @@
 -- along with their associated tags, layers, and other metadata.
 
 -- TODO: Merge multiple files
--- TODO: Optionally use existing selection from GUI (with shift+click)
+-- TODO: Separate dialogs, commands, and shortcuts for split and merge
+-- TODO: Set default dialog frame range to existing selection from GUI, if any
 -- TODO: Custom command and keyboard shortcut
 -- TODO: Allow multiple ranges or single frames, like '2-4,5,7-9'
 
@@ -64,7 +65,7 @@ local function get_dialog_inputs(src_sprite)
       :button { id = 'confirm', text = 'Confirm' }
       :button { id = 'cancel', text = 'Cancel' }
   local data = dialog:show().data
-  if data.cancel then
+  if not data.confirm then
     return nil
   end
 
@@ -115,7 +116,7 @@ local function get_dest_sprite(src_sprite, dest_path, overwrite, start_frame, en
 end
 
 --
--- Copy layers and associated metadata to new sprite if they don't already exist;
+-- Copy layers and associated metadata to new sprite if they do not already exist;
 -- assume unique layer names
 --
 local function copy_layers(src_sprite, dest_sprite)
@@ -194,39 +195,68 @@ local function copy_tags(src_sprite, dest_sprite, start_frame, end_frame, frame_
   return dest_sprite
 end
 
--- Gather source and frame range from CLI (or defaults)
-local src_sprite = get_src_sprite()
-local start_frame = tonumber(app.params['start-frame']) or 1
-local end_frame = tonumber(app.params['end-frame']) or len(src_sprite.frames)
-local dest_sprite = nil
+--
+-- Run main script from either CLI or GUI
+--
+local function run()
+  -- Gather source and frame range from CLI (or defaults)
+  local src_sprite = get_src_sprite()
+  local start_frame = tonumber(app.params['start-frame']) or 1
+  local end_frame = tonumber(app.params['end-frame']) or len(src_sprite.frames)
+  local dest_sprite = nil
 
--- Gather inputs from UI, if available
-if app.isUIAvailable then
-  local input_data = get_dialog_inputs(src_sprite)
-  if input_data then
-    start_frame = input_data.start_frame
-    end_frame = input_data.end_frame
-    dest_sprite = get_dest_sprite(src_sprite, input_data.dest_path, input_data.overwrite)
+  -- Gather inputs from UI, if available
+  if app.isUIAvailable then
+    local input_data = get_dialog_inputs(src_sprite)
+    if input_data then
+      start_frame = input_data.start_frame
+      end_frame = input_data.end_frame
+      dest_sprite = get_dest_sprite(src_sprite, input_data.dest_path, input_data.overwrite)
+    else
+      return
+    end
+
+    -- Otherwise get destination sprite from CLI (or default new sprite)
   else
-    return
+    dest_sprite = get_dest_sprite(src_sprite, nil, nil, start_frame, end_frame)
+    print('Copying ' .. end_frame - start_frame + 1 .. ' frames')
+    print('  From: ' .. src_sprite.filename)
+    print('  To:   ' .. dest_sprite.filename)
   end
 
-  -- Otherwise get destination sprite from CLI (or default new sprite)
-else
-  dest_sprite = get_dest_sprite(src_sprite, nil, nil, start_frame, end_frame)
-  print('Copying ' .. end_frame - start_frame + 1 .. ' frames')
-  print('  From: ' .. src_sprite.filename)
-  print('  To:   ' .. dest_sprite.filename)
+  -- If this is an existing sprite, adjust offset by number of existing frames
+  local frame_offset = -1 * (start_frame - 1)
+  if len(dest_sprite.layers) > 0 then
+    frame_offset = frame_offset + len(dest_sprite.frames)
+  end
+
+  -- Copy selected data and save new sprite
+  dest_sprite = copy_layers(src_sprite, dest_sprite)
+  dest_sprite = copy_cels(src_sprite, dest_sprite, start_frame, end_frame, frame_offset)
+  dest_sprite = copy_tags(src_sprite, dest_sprite, start_frame, end_frame, frame_offset)
+  dest_sprite:saveAs(dest_sprite.filename)
 end
 
--- If this is an existing sprite, adjust offset by number of existing frames
-local frame_offset = -1 * (start_frame - 1)
-if len(dest_sprite.layers) > 0 then
-  frame_offset = frame_offset + len(dest_sprite.frames)
+--
+-- Initialize plugin (if installed)
+--
+function init(plugin)
+  plugin.preferences.overwrite = false
+
+  plugin:newCommand {
+    id = 'SplitMerge',
+    title = 'Split/Merge Frames',
+    group = 'cel_new',
+    onclick = run,
+    onenabled = function()
+      return app.activeSprite
+    end
+  }
 end
 
--- Copy selected data and save new sprite
-dest_sprite = copy_layers(src_sprite, dest_sprite)
-dest_sprite = copy_cels(src_sprite, dest_sprite, start_frame, end_frame, frame_offset)
-dest_sprite = copy_tags(src_sprite, dest_sprite, start_frame, end_frame, frame_offset)
-dest_sprite:saveAs(dest_sprite.filename)
+--
+-- Run as a CLI script
+--
+if not app.isUIAvailable then
+  run()
+end
