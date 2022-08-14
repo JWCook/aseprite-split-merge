@@ -11,20 +11,23 @@
 -- dest-sprite: sprite to copy to; otherwise create new sprite
 -- start-frame: Frame to start copying from; default: 1
 -- end-frame: Frame to stop copying from; default: last frame of src-sprite
+-- overwrite: Overwrite an existing file instead of appending to it; default: false
 
--- Example:
--- aseprite -b sprites/Animals.aseprite \
---    --script-param dest-sprite=sprites/Animals_selection.png \
+-- CLI Example:
+-- aseprite -b sprites/my_sprite.aseprite \
+--    --script-param dest-sprite=sprites/my_sprite_subset.aseprite \
 --    --script-param start-frame=1 \
 --    --script-param end-frame=10 \
+--    --script-param overwrite=true \
 --    --script scripts/split_frame_range.lua
 
--- TODO: Option to overwrite instead of append an existing file
 -- TODO: Allow multiple ranges or single frames, like '2-4,5,7-9'
 -- TODO: Optionally use existing selection from GUI (with shift+click)
 
 
+--
 -- Test if an array contains a value
+--
 local function contains(array, value)
   for _, v in ipairs(array) do
     if v == value then
@@ -34,7 +37,9 @@ local function contains(array, value)
   return false
 end
 
+--
 -- Get the length of an array
+--
 local function len(array)
   local count = 0
   for _, _ in ipairs(array) do
@@ -43,7 +48,9 @@ local function len(array)
   return count
 end
 
+--
 -- Get a default filename using source sprite name + either a given suffix or frame range
+--
 local function get_default_dest_filename(src_sprite, suffix, start_frame, end_frame)
   local path, basename = src_sprite.filename:match('^(.+[/\\])(.-).([^.]*)$')
   if not suffix then
@@ -52,7 +59,9 @@ local function get_default_dest_filename(src_sprite, suffix, start_frame, end_fr
   return path .. basename .. '_' .. suffix .. '.aseprite'
 end
 
+--
 -- Get inputs from GUI dialog
+--
 local function get_dialog_inputs(src_sprite)
   local total_frames = len(src_sprite.frames) or 1
   local default_dest_filename = get_default_dest_filename(src_sprite, 'split')
@@ -66,7 +75,10 @@ local function get_dialog_inputs(src_sprite)
         label = 'Destination file',
         save = true,
         filename = default_dest_filename,
-        filetypes = { 'aseprite' }, }
+        filetypes = { 'aseprite' } }
+      :check { id = 'overwrite',
+        text = 'Overwrite existing file (otherwise append)',
+        selected = false }
       :button { id = 'confirm', text = 'Confirm' }
       :button { id = 'cancel', text = 'Cancel' }
   local data = dialog:show().data
@@ -88,7 +100,9 @@ local function get_dialog_inputs(src_sprite)
   end
 end
 
+--
 -- Get source sprite, either from CLI or from active sprite
+--
 local function get_src_sprite()
   if app.activeSprite then
     return app.activeSprite
@@ -99,10 +113,16 @@ local function get_src_sprite()
   end
 end
 
+--
 -- Get destination sprite, either from CLI or new sprite
-local function get_dest_sprite(src_sprite, dest_path, start_frame, end_frame)
+--
+local function get_dest_sprite(src_sprite, dest_path, overwrite, start_frame, end_frame)
   dest_path = dest_path or app.params['dest-sprite']
-  if dest_path and app.fs.isFile(dest_path) then
+  if app.params['overwrite'] then
+    overwrite = app.params['overwrite']:lower() == 'true'
+  end
+
+  if dest_path and app.fs.isFile(dest_path) and not overwrite then
     return Sprite { fromFile = dest_path }
   else
     local dest_sprite = Sprite(src_sprite.spec)
@@ -112,8 +132,10 @@ local function get_dest_sprite(src_sprite, dest_path, start_frame, end_frame)
   end
 end
 
--- Copy layers and associated metadata to new sprite
--- If they don't already exist; assume unique layer names
+--
+-- Copy layers and associated metadata to new sprite if they don't already exist;
+-- assume unique layer names
+--
 local function copy_layers(src_sprite, dest_sprite)
   local existing_layer_names = {}
   for i, layer in ipairs(dest_sprite.layers) do
@@ -138,7 +160,9 @@ local function copy_layers(src_sprite, dest_sprite)
   return dest_sprite
 end
 
+--
 -- Copy selected cels to new sprite
+--
 local function copy_cels(src_sprite, dest_sprite, start_frame, end_frame, frame_offset)
   -- Index layers by name
   local layer_idx = {}
@@ -164,7 +188,9 @@ local function copy_cels(src_sprite, dest_sprite, start_frame, end_frame, frame_
   return dest_sprite
 end
 
+--
 -- Copy tags and associated metadata for selected frames to new sprite
+--
 local function copy_tags(src_sprite, dest_sprite, start_frame, end_frame, frame_offset)
   for _, tag in ipairs(src_sprite.tags) do
     local src_start = tag.fromFrame.frameNumber
@@ -198,21 +224,19 @@ if app.isUIAvailable then
   if input_data then
     start_frame = input_data.start_frame
     end_frame = input_data.end_frame
-    dest_sprite = get_dest_sprite(src_sprite, input_data.dest_path)
+    dest_sprite = get_dest_sprite(src_sprite, input_data.dest_path, input_data.overwrite)
   else
     return
   end
 
   -- Otherwise get destination sprite from CLI (or default new sprite)
 else
-  dest_sprite = get_dest_sprite(src_sprite, nil, start_frame, end_frame)
+  dest_sprite = get_dest_sprite(src_sprite, nil, nil, start_frame, end_frame)
   print('Copying ' .. end_frame - start_frame + 1 .. ' frames')
   print('  From: ' .. src_sprite.filename)
   print('  To:   ' .. dest_sprite.filename)
 end
 
--- end
--- print(len(dest_sprite.layers))
 -- If this is an existing sprite, adjust offset by number of existing frames
 local frame_offset = -1 * (start_frame - 1)
 if len(dest_sprite.layers) > 0 then
