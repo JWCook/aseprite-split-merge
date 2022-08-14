@@ -113,7 +113,7 @@ local function copy_tags(src_sprite, dest_sprite, start_frame, end_frame)
       -- Adjust tag frame range to be within selection frame range
       local dest_start = math.max(1, src_start - frame_offset)
       local dest_end = math.min(len(dest_sprite.frames), src_end - frame_offset)
-      print('Copying tag', tag.name)
+      -- print('Copying tag', tag.name)
 
       -- Copy tag + metadata to adjusted range
       local new_tag = dest_sprite:newTag(dest_start, dest_end)
@@ -126,12 +126,41 @@ local function copy_tags(src_sprite, dest_sprite, start_frame, end_frame)
   return dest_sprite
 end
 
+local function validate_inputs(input_data, max_end)
+  local input_start = tonumber(input_data.start_frame)
+  local input_end = tonumber(input_data.end_frame)
+  if not input_start or input_start < 1 then
+    app.alert('Invalid start frame')
+  elseif not input_end or input_end > max_end then
+    app.alert('Invalid end frame')
+  else
+    return input_data
+  end
+end
+
+-- Get inputs from dialog in UI
+local function get_dialog_inputs(src_sprite)
+  local total_frames = len(src_sprite.frames) or 1
+  local dialog = Dialog()
+      :entry { id = "start_frame", label = "Start:", text = "1" }
+      :entry { id = "end_frame", label = "End:", text = tostring(total_frames) }
+      :button { id = "confirm", text = "Confirm" }
+      :button { id = "cancel", text = "Cancel" }
+
+  local data = dialog:show().data
+  if data.confirm then
+    app.alert("Start: " .. data.start_frame .. " End: " .. data.end_frame)
+    return validate_inputs(data, total_frames)
+  else
+    return nil
+  end
+end
+
 -- Gather inputs from CLI (or defaults)
 local src_sprite = get_src_sprite()
 local start_frame = tonumber(app.params['start-frame']) or 1
 local end_frame = tonumber(app.params['end-frame']) or len(src_sprite.frames)
 local dest_sprite = get_dest_sprite(src_sprite, start_frame, end_frame)
-
 
 local n_frames = end_frame - start_frame + 1
 print('Copying ' .. n_frames .. ' frames')
@@ -139,15 +168,17 @@ print('  From: ' .. src_sprite.filename)
 print('  To:   ' .. dest_sprite.filename)
 
 -- TODO: Dialog for GUI usage?
--- local data =
---   Dialog():entry{ id="start_frame", label="Start:", text="1" }
---           :entry{ id="end_frame", label="End:", text="10" }
---           :button{ id="confirm", text="Confirm" }
---           :button{ id="cancel", text="Cancel" }
---           :show().data
--- if data.confirm then
---   app.alert("The given value is '" .. data.user_value .. "'")
--- end
+if app.isUIAvailable then
+  print('!!!!')
+  local input_data = get_dialog_inputs(src_sprite)
+  if input_data then
+    start_frame = tonumber(input_data.start_frame)
+    end_frame = tonumber(input_data.end_frame)
+  else
+    return
+  end
+end
+
 
 -- Copy selected data and save new sprite
 dest_sprite:deleteLayer('Layer 1')
