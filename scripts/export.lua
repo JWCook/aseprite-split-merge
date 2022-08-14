@@ -1,45 +1,33 @@
--- Usage:
+-- Script that copies a range of frames to a separate file,
+-- along with their associated tags, layers, and other metadata.
+
+-- GUI Usage:
+-- 1. Find scripts folder; in Aseprite, go to File > Scrips > Open Scripts Folder
+-- 2. Copy split_frame_range.lua to scripts folder
+-- 3. Select File > Scripts > split_frame_range
+
+-- CLI Usage:
 -- src-sprite: sprite to copy from; otherwise use active sprite
 -- dest-sprite: sprite to copy to; otherwise create new sprite
 -- start-frame: Frame to start copying from; default: 1
 -- end-frame: Frame to stop copying from; default: last frame of src-sprite
---
+
 -- Example:
 -- aseprite -b sprites/Animals.aseprite \
 --    --script-param dest-sprite=sprites/Animals_selection.png \
 --    --script-param start-frame=1 \
 --    --script-param end-frame=10 \
---    --script scripts/export.lua
+--    --script scripts/split_frame_range.lua
 
+-- TODO: Allow appending to an existing file
+-- TODO: Allow multiple ranges or single frames, like '2-4,5,7-9'
+-- TODO: Optionally use existing selection from GUI (with shift+click)
 
--- Get source sprite, either from CLI or from active sprite
-local function get_src_sprite()
-  if app.activeSprite then
-    return app.activeSprite
-  elseif app.params['src-sprite'] then
-    return Sprite { fromFile = app.params['src-sprite'] }
-  else
-    error('No sprite selected')
-  end
-end
-
--- Get destination sprite, either from CLI or new sprite
-local function get_dest_sprite(src_sprite, start_frame, end_frame)
-  if app.params['dest-sprite'] then
-    return Sprite { fromFile = app.params['dest-sprite'] }
-  else
-    -- Create new sprite, using source sprite name + frame range as the filename
-    local dest_sprite = Sprite(src_sprite.spec)
-    local path, basename = src_sprite.filename:match("^(.+[/\\])(.-).([^.]*)$")
-    dest_sprite.filename = path .. basename .. '_' .. start_frame .. '-' .. end_frame .. '.aseprite'
-    return dest_sprite
-  end
-end
 
 -- Test if an array contains a value
 local function contains(array, value)
-  for _, value in ipairs(array) do
-    if value == value then
+  for _, v in ipairs(array) do
+    if v == value then
       return true
     end
   end
@@ -53,6 +41,75 @@ local function len(array)
     count = count + 1
   end
   return count
+end
+
+-- Get a default filename using source sprite name + either a given suffix or frame range
+local function get_default_dest_filename(src_sprite, suffix, start_frame, end_frame)
+  local path, basename = src_sprite.filename:match('^(.+[/\\])(.-).([^.]*)$')
+  if not suffix then
+    suffix = start_frame .. '-' .. end_frame
+  end
+  return path .. basename .. '_' .. suffix .. '.aseprite'
+end
+
+-- Get inputs from GUI dialog
+local function get_dialog_inputs(src_sprite)
+  local total_frames = len(src_sprite.frames) or 1
+  local default_dest_filename = get_default_dest_filename(src_sprite, 'split')
+
+  -- Build dialog
+  local dialog = Dialog { title = 'Split frame range' }
+      :label { text = 'Copy a range of frames to a separate sprite' }
+      :number { id = 'start_frame', label = 'Start:', text = '1' }
+      :number { id = 'end_frame', label = 'End:', text = tostring(total_frames) }
+      :file { id = 'dest_path',
+        label = 'Destination file',
+        save = true,
+        filename = default_dest_filename,
+        filetypes = { 'aseprite' }, }
+      :button { id = 'confirm', text = 'Confirm' }
+      :button { id = 'cancel', text = 'Cancel' }
+  local data = dialog:show().data
+  if data.cancel then
+    return nil
+  end
+
+  -- Validate inputs
+  data.start_frame = tonumber(data.start_frame)
+  data.end_frame = tonumber(data.end_frame)
+  if not data.start_frame or data.start_frame < 1 then
+    app.alert('Invalid start frame')
+  elseif not data.end_frame
+      or data.end_frame > total_frames
+      or data.end_frame < data.start_frame then
+    app.alert('Invalid end frame')
+  else
+    return data
+  end
+end
+
+-- Get source sprite, either from CLI or from active sprite
+local function get_src_sprite()
+  if app.activeSprite then
+    return app.activeSprite
+  elseif app.params['src-sprite'] then
+    return Sprite { fromFile = app.params['src-sprite'] }
+  else
+    error('No sprite selected')
+  end
+end
+
+-- Get destination sprite, either from CLI or new sprite
+local function get_dest_sprite(src_sprite, dest_path, start_frame, end_frame)
+  dest_path = dest_path or app.params['dest-sprite']
+  if dest_path and app.fs.isFile(dest_path) then
+    return Sprite { fromFile = dest_path }
+  else
+    local dest_sprite = Sprite(src_sprite.spec)
+    dest_sprite.filename = dest_path or get_default_dest_filename(src_sprite, nil, start_frame, end_frame)
+    dest_sprite:deleteLayer('Layer 1')
+    return dest_sprite
+  end
 end
 
 -- Copy layers and associated metadata to new sprite
@@ -113,7 +170,6 @@ local function copy_tags(src_sprite, dest_sprite, start_frame, end_frame)
       -- Adjust tag frame range to be within selection frame range
       local dest_start = math.max(1, src_start - frame_offset)
       local dest_end = math.min(len(dest_sprite.frames), src_end - frame_offset)
-      -- print('Copying tag', tag.name)
 
       -- Copy tag + metadata to adjusted range
       local new_tag = dest_sprite:newTag(dest_start, dest_end)
@@ -126,62 +182,33 @@ local function copy_tags(src_sprite, dest_sprite, start_frame, end_frame)
   return dest_sprite
 end
 
-local function validate_inputs(input_data, max_end)
-  local input_start = tonumber(input_data.start_frame)
-  local input_end = tonumber(input_data.end_frame)
-  if not input_start or input_start < 1 then
-    app.alert('Invalid start frame')
-  elseif not input_end or input_end > max_end then
-    app.alert('Invalid end frame')
-  else
-    return input_data
-  end
-end
-
--- Get inputs from dialog in UI
-local function get_dialog_inputs(src_sprite)
-  local total_frames = len(src_sprite.frames) or 1
-  local dialog = Dialog()
-      :entry { id = "start_frame", label = "Start:", text = "1" }
-      :entry { id = "end_frame", label = "End:", text = tostring(total_frames) }
-      :button { id = "confirm", text = "Confirm" }
-      :button { id = "cancel", text = "Cancel" }
-
-  local data = dialog:show().data
-  if data.confirm then
-    app.alert("Start: " .. data.start_frame .. " End: " .. data.end_frame)
-    return validate_inputs(data, total_frames)
-  else
-    return nil
-  end
-end
-
--- Gather inputs from CLI (or defaults)
+-- Gather source and frame range from CLI (or defaults)
 local src_sprite = get_src_sprite()
 local start_frame = tonumber(app.params['start-frame']) or 1
 local end_frame = tonumber(app.params['end-frame']) or len(src_sprite.frames)
-local dest_sprite = get_dest_sprite(src_sprite, start_frame, end_frame)
+local dest_sprite = nil
 
-local n_frames = end_frame - start_frame + 1
-print('Copying ' .. n_frames .. ' frames')
-print('  From: ' .. src_sprite.filename)
-print('  To:   ' .. dest_sprite.filename)
-
--- TODO: Dialog for GUI usage?
+-- Gather inputs from UI, if available
 if app.isUIAvailable then
-  print('!!!!')
   local input_data = get_dialog_inputs(src_sprite)
   if input_data then
-    start_frame = tonumber(input_data.start_frame)
-    end_frame = tonumber(input_data.end_frame)
+    start_frame = input_data.start_frame
+    end_frame = input_data.end_frame
+    dest_sprite = get_dest_sprite(src_sprite, input_data.dest_path)
   else
     return
   end
+
+  -- Otherwise get destination sprite from CLI (or default new sprite)
+else
+  dest_sprite = get_dest_sprite(src_sprite, nil, start_frame, end_frame)
+  print('Copying ' .. end_frame - start_frame + 1 .. ' frames')
+  print('  From: ' .. src_sprite.filename)
+  print('  To:   ' .. dest_sprite.filename)
 end
 
 
 -- Copy selected data and save new sprite
-dest_sprite:deleteLayer('Layer 1')
 dest_sprite = copy_layers(src_sprite, dest_sprite)
 dest_sprite = copy_cels(src_sprite, dest_sprite, start_frame, end_frame)
 dest_sprite = copy_tags(src_sprite, dest_sprite, start_frame, end_frame)
