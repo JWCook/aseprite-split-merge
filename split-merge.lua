@@ -98,6 +98,37 @@ local function get_dest_sprite(src_sprite, dest_path, overwrite, start_frame, en
 end
 
 --
+-- Workaroud for some unwanted behavior: The last tag of an existing sprite will
+-- automatically extend to new frames. Tag frame range can't (yet?) be directly
+-- modified, so it needs to be deleted and added again.
+--
+local function fix_first_frame(dest_sprite)
+  if #dest_sprite.tags == 0 then
+    return dest_sprite
+  end
+
+  -- Copy and remove last tag, and add new frame
+  local last_tag = dest_sprite.tags[#dest_sprite.tags]
+  local fromFrame = last_tag.fromFrame
+  local toFrame = last_tag.toFrame
+  local aniDir = last_tag.aniDir
+  local color = last_tag.color
+  local data = last_tag.data
+  local name = last_tag.name
+  dest_sprite:deleteTag(last_tag)
+  dest_sprite:newEmptyFrame()
+
+  -- Add last tag back with original frame range and data
+  local new_tag = dest_sprite:newTag(fromFrame.frameNumber, toFrame.frameNumber)
+  new_tag.aniDir = aniDir
+  new_tag.color = color
+  new_tag.data = data
+  new_tag.name = name
+
+  return dest_sprite
+end
+
+--
 -- Copy layers and associated metadata to new sprite if they do not already exist;
 -- assume unique layer names
 --
@@ -141,7 +172,7 @@ local function copy_cels(src_sprite, dest_sprite, start_frame, end_frame, frame_
       -- Create new frame, if needed
       local dest_frame = cel.frameNumber + frame_offset
       if dest_frame > #dest_sprite.frames then
-        dest_sprite:newFrame()
+        dest_sprite:newEmptyFrame()
       end
 
       -- Look up layer by name and add new cel
@@ -216,6 +247,7 @@ local function run()
 
   -- Copy selected data and save new sprite
   dest_sprite = copy_layers(src_sprite, dest_sprite)
+  dest_sprite = fix_first_frame(dest_sprite)
   dest_sprite = copy_cels(src_sprite, dest_sprite, start_frame, end_frame, frame_offset)
   dest_sprite = copy_tags(src_sprite, dest_sprite, start_frame, end_frame, frame_offset)
   dest_sprite:saveAs(dest_sprite.filename)
