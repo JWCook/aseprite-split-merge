@@ -210,33 +210,60 @@ local function copy_tags(src_sprite, dest_sprite, start_frame, end_frame, frame_
 end
 
 --
+-- Get input parameters from CLI (or defaults)
+--
+local function get_cli_inputs()
+
+  local src_sprite = get_src_sprite()
+  if not src_sprite then
+    return nil, nil, nil, nil
+  end
+
+  local start_frame = tonumber(app.params['start-frame']) or 1
+  local end_frame = tonumber(app.params['end-frame']) or #src_sprite.frames
+  local dest_sprite = get_dest_sprite(src_sprite, nil, nil, start_frame, end_frame)
+  print('Copying ' .. end_frame - start_frame + 1 .. ' frames')
+  print('  From: ' .. src_sprite.filename)
+  print('  To:   ' .. dest_sprite.filename)
+
+  return src_sprite, dest_sprite, start_frame, end_frame
+end
+
+--
+-- Get input parameters from GUI
+--
+local function get_gui_inputs()
+  local src_sprite = get_src_sprite()
+  if not src_sprite then
+    return nil, nil, nil, nil
+  end
+
+  local input_data = get_dialog_inputs(src_sprite)
+  if not input_data then
+    return nil, nil, nil, nil
+  end
+
+  local start_frame = input_data.start_frame
+  local end_frame = input_data.end_frame
+  local dest_sprite = get_dest_sprite(src_sprite, input_data.dest_path, input_data.overwrite)
+
+  return src_sprite, dest_sprite, start_frame, end_frame
+end
+
+--
 -- Run main script from either CLI or GUI
 --
 local function run()
-  local src_sprite = get_src_sprite()
-  if not src_sprite then
-    return
-  end
-  local start_frame = tonumber(app.params['start-frame']) or 1
-  local end_frame = tonumber(app.params['end-frame']) or #src_sprite.frames
-  local dest_sprite = nil
+  local src_sprite, dest_sprite, start_frame, end_frame = nil, nil, nil, nil
 
-  -- Gather inputs from GUI, if available
+  -- Gather inputs from GUI, CLI, or defaults
   if app.isUIAvailable then
-    local input_data = get_dialog_inputs(src_sprite)
-    if not input_data then
-      return
-    end
-    start_frame = input_data.start_frame
-    end_frame = input_data.end_frame
-    dest_sprite = get_dest_sprite(src_sprite, input_data.dest_path, input_data.overwrite)
-
-    -- Otherwise gather inputs from CLI (or defaults)
+    src_sprite, dest_sprite, start_frame, end_frame = get_gui_inputs()
   else
-    dest_sprite = get_dest_sprite(src_sprite, nil, nil, start_frame, end_frame)
-    print('Copying ' .. end_frame - start_frame + 1 .. ' frames')
-    print('  From: ' .. src_sprite.filename)
-    print('  To:   ' .. dest_sprite.filename)
+    src_sprite, dest_sprite, start_frame, end_frame = get_cli_inputs()
+  end
+  if not src_sprite or not dest_sprite then
+    return
   end
 
   -- If this is an existing sprite, adjust offset by number of existing frames
