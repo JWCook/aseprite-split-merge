@@ -14,17 +14,6 @@ local function contains(array, value)
 end
 
 --
--- Get the length of an array
---
-local function len(array)
-  local count = 0
-  for _, _ in ipairs(array) do
-    count = count + 1
-  end
-  return count
-end
-
---
 -- Get a default filename using source sprite name + either a given suffix or frame range
 --
 local function get_default_dest_filename(src_sprite, suffix, start_frame, end_frame)
@@ -39,7 +28,7 @@ end
 -- Get inputs from GUI dialog
 --
 local function get_dialog_inputs(src_sprite)
-  local total_frames = len(src_sprite.frames) or 1
+  local total_frames = #src_sprite.frames or 1
   local default_dest_filename = get_default_dest_filename(src_sprite, 'split')
 
   -- Build dialog
@@ -85,7 +74,7 @@ local function get_src_sprite()
   elseif app.params['src-sprite'] then
     return Sprite { fromFile = app.params['src-sprite'] }
   else
-    error('No sprite selected')
+    return nil
   end
 end
 
@@ -175,7 +164,7 @@ local function copy_tags(src_sprite, dest_sprite, start_frame, end_frame, frame_
     if src_start <= end_frame and src_end >= start_frame then
       -- Adjust tag frame range to be within selection frame range
       local dest_start = math.max(1, src_start + frame_offset)
-      local dest_end = math.min(len(dest_sprite.frames), src_end + frame_offset)
+      local dest_end = math.min(#dest_sprite.frames, src_end + frame_offset)
 
       -- Copy tag + metadata to adjusted range
       local new_tag = dest_sprite:newTag(dest_start, dest_end)
@@ -193,24 +182,25 @@ end
 -- Run main script from either CLI or GUI
 --
 local function run()
-  -- Gather source and frame range from CLI (or defaults)
   local src_sprite = get_src_sprite()
+  if not src_sprite then
+    return
+  end
   local start_frame = tonumber(app.params['start-frame']) or 1
-  local end_frame = tonumber(app.params['end-frame']) or len(src_sprite.frames)
+  local end_frame = tonumber(app.params['end-frame']) or #src_sprite.frames
   local dest_sprite = nil
 
-  -- Gather inputs from UI, if available
+  -- Gather inputs from GUI, if available
   if app.isUIAvailable then
     local input_data = get_dialog_inputs(src_sprite)
-    if input_data then
-      start_frame = input_data.start_frame
-      end_frame = input_data.end_frame
-      dest_sprite = get_dest_sprite(src_sprite, input_data.dest_path, input_data.overwrite)
-    else
+    if not input_data then
       return
     end
+    start_frame = input_data.start_frame
+    end_frame = input_data.end_frame
+    dest_sprite = get_dest_sprite(src_sprite, input_data.dest_path, input_data.overwrite)
 
-    -- Otherwise get destination sprite from CLI (or default new sprite)
+    -- Otherwise gather inputs from CLI (or defaults)
   else
     dest_sprite = get_dest_sprite(src_sprite, nil, nil, start_frame, end_frame)
     print('Copying ' .. end_frame - start_frame + 1 .. ' frames')
@@ -220,8 +210,8 @@ local function run()
 
   -- If this is an existing sprite, adjust offset by number of existing frames
   local frame_offset = -1 * (start_frame - 1)
-  if len(dest_sprite.layers) > 0 then
-    frame_offset = frame_offset + len(dest_sprite.frames)
+  if #dest_sprite.layers > 0 then
+    frame_offset = frame_offset + #dest_sprite.frames
   end
 
   -- Copy selected data and save new sprite
